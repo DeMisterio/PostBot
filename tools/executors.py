@@ -195,13 +195,13 @@ class ToolExecutors:
         item_approved = False
         target_item = None
         for item in plan.items:
-            if item.get("item_id") == plan_item_id and item.get("status") == "approved":
+            if item.get("item_id") == plan_item_id and item.get("status") in ["approved", "published", "scheduled"]:
                 item_approved = True
                 target_item = item
                 break
                 
         if not item_approved:
-             return json.dumps({"error": "permission_denied", "reason": f"Plan item {plan_item_id} is not approved."})
+             return json.dumps({"error": "permission_denied", "reason": f"Plan item {plan_item_id} is not approved, published or scheduled."})
              
         # Fetch author profile for channel_id
         profile = self.db.query(AuthorProfile).filter(AuthorProfile.author_id == self.author_id).first()
@@ -239,6 +239,8 @@ class ToolExecutors:
             topic=target_item.get("title"),
             source_repo=target_item.get("source", {}).get("repo_full_name"),
             summary="Published via agent",
+            post_text=post_text,
+            image_ref=image_ref,
             had_image=bool(image_ref)
         )
         self.db.add(history)

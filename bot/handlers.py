@@ -73,9 +73,36 @@ async def handle_get_plan_command(update: Update, context: ContextTypes.DEFAULT_
                 print(f"Critical error in PlanningAgent thread: {e}")
             finally:
                 thread_db.close()
-                
         asyncio.create_task(asyncio.to_thread(run_agent))
+    finally:
+        db.close()
+
+async def handle_my_posts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = SessionLocal()
+    try:
+        from models import PostsHistory
+        import datetime
+        from datetime import timedelta
         
+        # Get posts from last 7 days
+        posts = db.query(PostsHistory).filter(
+            PostsHistory.published_at >= datetime.datetime.utcnow() - timedelta(days=7)
+        ).order_by(PostsHistory.published_at.desc()).all()
+        
+        if not posts:
+            await update.message.reply_text("За последние 7 дней не было публикаций.")
+            return
+            
+        keyboard = {"inline_keyboard": []}
+        for post in posts:
+            title = post.topic if post.topic else "Без названия"
+            # Truncate title
+            if len(title) > 30: title = title[:27] + "..."
+            date_str = post.published_at.strftime("%d.%m %H:%M")
+            keyboard["inline_keyboard"].append([{"text": f"[{date_str}] {title}", "callback_data": f"mypost_{post.post_id}"}])
+            
+        await update.message.reply_text("Вот список опубликованных постов за последние 7 дней:", reply_markup=keyboard)
     finally:
         db.close()
 
@@ -316,6 +343,98 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                         planned_date_str = item.get("planned_date", "неизвестно")
                 db.commit()
                 await query.edit_message_text(text=f"📅 Пост одобрен и запланирован на публикацию: {planned_date_str}")
+                
+        elif data.startswith("mypost_"):
+            post_id = data.split("_", 1)[1]
+            from models import PostsHistory
+            post = db.query(PostsHistory).filter(PostsHistory.post_id == post_id).first()
+            if post:
+                keyboard = {
+                    "inline_keyboard": [
+                        [{"text": "🔄 Переопубликовать", "callback_data": f"republish_{post_id}"}],
+                        [{"text": "🗑 Удалить с канала", "callback_data": f"deletepost_{post_id}"}],
+                        [{"text": "🔙 Назад", "callback_data": "back_to_posts"}]
+                    ]
+                }
+                text = f"📝 **{post.topic}**\n\n"
+                text += f"Тип: {post.type}\n"
+                text += f"Дата: {post.published_at.strftime('%Y-%m-%d %H:%M')}\n"
+                if post.message_id:
+                    text += f"ID сообщения: {post.message_id}\n"
+                else:
+                    text += f"⚠️ Ошибка: ID сообщения не сохранен.\n"
+                    
+                await query.edit_message_text(text=text, reply_markup=keyboard)
+            else:
+                await query.answer("Пост не найден.")
+                
+        elif data == "back_to_posts":
+            from models import PostsHistory
+            import datetime
+            from datetime import timedelta
+            posts = db.query(PostsHistory).filter(PostsHistory.published_at >= datetime.datetime.utcnow() - timedelta(days=7)).order_by(PostsHistory.published_at.desc()).all()
+            if not posts:
+                await query.edit_message_text("За последние 7 дней не было публикаций.")
+            else:
+                keyboard = {"inline_keyboard": []}
+                for post in posts:
+                    title = post.topic if post.topic else "Без названия"
+                    if len(title) > 30: title = title[:27] + "..."
+                    date_str = post.published_at.strftime("%d.%m %H:%M")
+                    keyboard["inline_keyboard"].append([{"text": f"[{date_str}] {title}", "callback_data": f"mypost_{post.post_id}"}])
+                await query.edit_message_text("Вот список опубликованных постов за последние 7 дней:", reply_markup=keyboard)
+                
+        elif data.startswith("deletepost_"):
+            post_id = data.split("_", 1)[1]
+            from models import PostsHistory
+            post = db.query(PostsHistory).filter(PostsHistory.post_id == post_id).first()
+            if post:
+                profile = db.query(AuthorProfile).filter(AuthorProfile.author_id == user_id).first()
+                if profile and profile.channel_id and post.message_id:
+                    import requests, config
+                    res = requests.post(
+                        f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/deleteMessage",
+                        json={"chat_id": profile.channel_id, "message_id": post.message_id}
+                    )
+                    if res.status_code == 200:
+                        db.delete(post)
+                        db.commit()
+                        await query.edit_message_text("🗑 Пост успешно удален с канала и из истории.")
+                    else:
+                        await query.answer(f"Ошибка удаления: {res.text}", show_alert=True)
+                else:
+                    await query.answer("Невозможно удалить: нет channel_id или message_id.", show_alert=True)
+            else:
+                await query.answer("Пост не найден.")
+                
+        elif data.startswith("republish_"):
+            post_id = data.split("_", 1)[1]
+            from models import PostsHistory
+            post = db.query(PostsHistory).filter(PostsHistory.post_id == post_id).first()
+            if post and post.post_text:
+                profile = db.query(AuthorProfile).filter(AuthorProfile.author_id == user_id).first()
+                if profile and profile.channel_id:
+                    import requests, config
+                    if post.image_ref:
+                        res = requests.post(
+                            f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendPhoto",
+                            json={"chat_id": profile.channel_id, "photo": post.image_ref, "caption": post.post_text}
+                        )
+                    else:
+                        res = requests.post(
+                            f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
+                            json={"chat_id": profile.channel_id, "text": post.post_text}
+                        )
+                    if res.status_code == 200:
+                        post.message_id = res.json().get("result", {}).get("message_id")
+                        db.commit()
+                        await query.edit_message_text("🚀 Пост переопубликован!")
+                    else:
+                        await query.answer(f"Ошибка публикации: {res.text}", show_alert=True)
+                else:
+                    await query.answer("Не настроен канал.", show_alert=True)
+            else:
+                await query.answer("Текст поста не сохранен в базе, переопубликовать невозможно.", show_alert=True)
                     
     finally:
         db.close()

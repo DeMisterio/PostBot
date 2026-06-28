@@ -54,5 +54,7 @@ class PostsHistory(Base):
     topic = Column(String)
     source_repo = Column(String, nullable=True)
     summary = Column(String)
+    post_text = Column(String, nullable=True)
+    image_ref = Column(String, nullable=True)
     had_image = Column(Boolean, default=False)
     stats = Column(JSON, default={"views": 0, "reactions": {}})

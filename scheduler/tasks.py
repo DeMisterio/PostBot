@@ -53,6 +53,11 @@ def check_generation_queue(force=False):
                                         raise RuntimeError(f"Agent API Error: {response}")
                                     elif isinstance(response, dict) and response.get("status") == "paused":
                                         from models import AgentState
+                                        existing_state = db.query(AgentState).filter(AgentState.author_id == profile.author_id).first()
+                                        if existing_state:
+                                            db.delete(existing_state)
+                                            db.commit()
+                                            
                                         new_state = AgentState(
                                             author_id=profile.author_id,
                                             plan_item_id=response.get("plan_item_id", item["item_id"]),

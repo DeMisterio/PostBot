@@ -99,9 +99,16 @@ class AgentCore:
                         try:
                             res_json = json.loads(result)
                             if res_json.get("status") == "paused":
+                                serializable_messages = []
+                                for m in messages:
+                                    if isinstance(m, dict):
+                                        serializable_messages.append(m)
+                                    else:
+                                        serializable_messages.append(m.model_dump(exclude_unset=True))
+                                
                                 return {
                                     "status": "paused",
-                                    "messages": messages,
+                                    "messages": serializable_messages,
                                     "plan_item_id": executor.context.get("plan_item_id")
                                 }
                         except:
