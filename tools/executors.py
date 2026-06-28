@@ -308,8 +308,6 @@ class ToolExecutors:
         if method:
             try:
                 return method(**arguments)
-            except TypeError as e:
-                return json.dumps({"error": f"Invalid arguments for {tool_name}: {str(e)}"})
             except Exception as e:
-                return json.dumps({"error": f"Execution failed: {str(e)}"})
+                return json.dumps({"error": f"Tool execution error for {tool_name}: {str(e)}"})
         return json.dumps({"error": f"Tool {tool_name} not found"})

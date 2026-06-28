@@ -131,7 +131,25 @@ async def handle_plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def handle_generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from scheduler.tasks import check_generation_queue
-    await update.message.reply_text("⚙️ Запускаю проверку очереди генерации... Если есть посты на сегодня/завтра, бот начнет их писать (занимает ~1-2 минуты).")
+    db = SessionLocal()
+    try:
+        # Автоматический "ремонтник": если посты зависли в статусе generating (например, после краша), возвращаем их в planned
+        plans = db.query(ContentPlan).filter(ContentPlan.status == "active").all()
+        for p in plans:
+            updated = False
+            new_items = []
+            for it in p.items:
+                if it.get("status") == "generating":
+                    it["status"] = "planned"
+                    updated = True
+                new_items.append(it)
+            if updated:
+                p.items = new_items
+        db.commit()
+    finally:
+        db.close()
+        
+    await update.message.reply_text("⚙️ Размораживаю зависшие посты и запускаю генерацию... Если есть посты на сегодня/завтра, бот начнет их писать (занимает ~1-2 минуты).")
     asyncio.create_task(asyncio.to_thread(check_generation_queue))
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):

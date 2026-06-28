@@ -48,6 +48,8 @@ def check_generation_queue():
                                 try:
                                     response = agent.run(db=db, author_id=profile.author_id, trigger_message="Generate post based on the current context.", context=context)
                                     print(f"GenerationAgent finished: {response}")
+                                    if isinstance(response, str):
+                                        raise RuntimeError(f"Agent API Error: {response}")
                                 except Exception as e:
                                     print(f"GenerationAgent failed: {e}")
                                     plan_refresh = db.query(ContentPlan).filter(ContentPlan.plan_id == plan.plan_id).first()
