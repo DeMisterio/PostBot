@@ -1,6 +1,7 @@
 import json
 import requests
 import datetime
+import uuid
 from sqlalchemy.orm import Session
 from models import AuthorProfile, ContentPlan, PostsHistory, AgentState
 import config
@@ -86,6 +87,10 @@ class ToolExecutors:
             return json.dumps({"error": str(e)})
 
     def submit_plan(self, items: list):
+        for item in items:
+            if "item_id" not in item or not item["item_id"]:
+                item["item_id"] = str(uuid.uuid4())
+                
         plan = ContentPlan(
             items=items,
             status="awaiting_approval",

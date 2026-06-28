@@ -68,7 +68,7 @@ PLANNING_TOOLS = [
                               "readme_ref": {"type": "string"}
                           }
                       },
-                      "planned_date": {"type": "string"},
+                      "planned_date": {"type": "string", "description": "ISO8601 (YYYY-MM-DDTHH:MM:SSZ)"},
                       "notes": {"type": "string"}
                   },
                   "required": ["type", "title", "source", "planned_date", "notes"]

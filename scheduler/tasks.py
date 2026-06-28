@@ -30,7 +30,11 @@ def check_generation_queue():
                     try:
                         planned_date_str = item.get("planned_date")
                         if planned_date_str:
-                            planned_date = datetime.datetime.fromisoformat(planned_date_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                            try:
+                                planned_date = datetime.datetime.fromisoformat(planned_date_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                            except ValueError:
+                                planned_date = datetime.datetime.utcnow() # Fallback
+                                
                             if datetime.datetime.utcnow() >= planned_date - datetime.timedelta(hours=lead_hours):
                                 plan.items = [
                                     {**it, "status": "generating"} if it.get("item_id") == item.get("item_id") else it
