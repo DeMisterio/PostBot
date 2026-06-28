@@ -4,7 +4,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 import config
 from database import engine, Base
-from bot.handlers import handle_message, handle_callback_query, handle_start, handle_reset, handle_plan_command
+from bot.handlers import handle_message, handle_callback_query, handle_start, handle_reset, handle_plan_command, handle_generate_command
 from scheduler.tasks import check_generation_queue, check_planning_queue, check_reminders
 
 logging.basicConfig(
@@ -35,6 +35,7 @@ def main():
     application.add_handler(CommandHandler("start", handle_start))
     application.add_handler(CommandHandler("reset", handle_reset))
     application.add_handler(CommandHandler("plan", handle_plan_command))
+    application.add_handler(CommandHandler("generate", handle_generate_command))
     application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & (~filters.COMMAND), handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback_query))
 

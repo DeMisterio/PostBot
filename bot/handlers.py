@@ -68,6 +68,11 @@ async def handle_plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     finally:
         db.close()
 
+async def handle_generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from scheduler.tasks import check_generation_queue
+    await update.message.reply_text("⚙️ Запускаю проверку очереди генерации... Если есть посты на сегодня/завтра, бот начнет их писать (занимает ~1-2 минуты).")
+    asyncio.create_task(asyncio.to_thread(check_generation_queue))
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     text = update.message.text or update.message.caption or ""
