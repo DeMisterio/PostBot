@@ -1,5 +1,5 @@
 import logging
-from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, CommandHandler, filters
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import config
