@@ -5,8 +5,8 @@ from database import SessionLocal
 from models import ContentPlan, AuthorProfile
 from agents.instances import GenerationAgent, PlanningAgent
 
-def check_generation_queue():
-    print("Scheduler: check_generation_queue running...")
+def check_generation_queue(force=False):
+    print(f"Scheduler: check_generation_queue running... (force={force})")
     db = SessionLocal()
     try:
         plans = db.query(ContentPlan).filter(ContentPlan.status == "active").all()
@@ -35,7 +35,7 @@ def check_generation_queue():
                             except ValueError:
                                 planned_date = datetime.datetime.utcnow() # Fallback
                                 
-                            if datetime.datetime.utcnow() >= planned_date - datetime.timedelta(hours=lead_hours):
+                            if force or (datetime.datetime.utcnow() >= planned_date - datetime.timedelta(hours=lead_hours)):
                                 plan.items = [
                                     {**it, "status": "generating"} if it.get("item_id") == item.get("item_id") else it
                                     for it in plan.items
@@ -59,7 +59,9 @@ def check_generation_queue():
                                             for it in plan_refresh.items
                                         ]
                                         db.commit()
-                                break
+                                
+                                if force:
+                                    break # Only force generate one at a time
                     except Exception as e:
                         print(f"Error parsing date {e}")
     finally:
@@ -138,5 +140,49 @@ def check_reminders():
                             db.commit()
                         except Exception as e:
                             print(f"Failed to send reminder to Telegram for {profile.author_id}: {e}")
+    finally:
+        db.close()
+
+def check_publishing_queue():
+    print("Scheduler: check_publishing_queue running...")
+    db = SessionLocal()
+    try:
+        plans = db.query(ContentPlan).filter(ContentPlan.status == "active").all()
+        for plan in plans:
+            profile = db.query(AuthorProfile).filter(AuthorProfile.author_id == plan.author_id).first()
+            if not profile or not profile.channel_id:
+                continue
+
+            updated = False
+            new_items = []
+            for item in plan.items:
+                if item.get("status") == "scheduled":
+                    try:
+                        planned_date_str = item.get("planned_date")
+                        if planned_date_str:
+                            planned_date = datetime.datetime.fromisoformat(planned_date_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                            if datetime.datetime.utcnow() >= planned_date:
+                                # Fetch the post text from AgentState or somewhere?
+                                # Wait, AgentState only stores messages.
+                                # Where is the text? We can just wake up the agent to publish, or publish it directly if we saved it.
+                                # The best way is to wake up the agent to publish:
+                                print(f"Triggering scheduled publish for item {item['item_id']}")
+                                from agents.instances import GenerationAgent
+                                from models import AgentState
+                                state = db.query(AgentState).filter(AgentState.plan_item_id == item["item_id"]).first()
+                                if state:
+                                    agent = GenerationAgent()
+                                    ctx = {"plan_item_id": item["item_id"]}
+                                    agent.run(db=db, author_id=profile.author_id, trigger_message="Пост запланирован на сейчас. Вызывай publish_post.", context=ctx, previous_messages=state.messages)
+                                    db.delete(state)
+                                
+                                item["status"] = "published"
+                                updated = True
+                    except Exception as e:
+                        print(f"Failed to publish scheduled post: {e}")
+                new_items.append(item)
+            if updated:
+                plan.items = new_items
+                db.commit()
     finally:
         db.close()

@@ -157,7 +157,8 @@ class ToolExecutors:
         if config.TELEGRAM_BOT_TOKEN:
             keyboard = {
                 "inline_keyboard": [
-                    [{"text": "✅ Опубликовать", "callback_data": f"approve_post_{plan_item_id}"}],
+                    [{"text": "🚀 Отправить сейчас", "callback_data": f"publish_now_{plan_item_id}"}],
+                    [{"text": "📅 Одобрить (по плану)", "callback_data": f"schedule_post_{plan_item_id}"}],
                     [{"text": "✏️ Редактировать", "callback_data": f"edit_post_{plan_item_id}"}],
                     [{"text": "⏭ Пропустить", "callback_data": f"skip_post_{plan_item_id}"}]
                 ]

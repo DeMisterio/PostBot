@@ -5,7 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import config
 from database import engine, Base
 from bot.handlers import handle_message, handle_callback_query, handle_start, handle_reset, handle_plan_command, handle_generate_command, handle_get_plan_command
-from scheduler.tasks import check_generation_queue, check_planning_queue, check_reminders
+from scheduler.tasks import check_generation_queue, check_planning_queue, check_reminders, check_publishing_queue
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -23,6 +23,7 @@ def main():
     # 2. Setup Scheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(check_generation_queue, 'interval', minutes=10)
+    scheduler.add_job(check_publishing_queue, 'interval', minutes=1)
     scheduler.add_job(check_planning_queue, 'interval', minutes=15)
     scheduler.add_job(check_reminders, 'interval', minutes=5)
     scheduler.start()

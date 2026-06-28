@@ -149,8 +149,8 @@ async def handle_generate_command(update: Update, context: ContextTypes.DEFAULT_
     finally:
         db.close()
         
-    await update.message.reply_text("⚙️ Размораживаю зависшие посты и запускаю генерацию... Если есть посты на сегодня/завтра, бот начнет их писать (занимает ~1-2 минуты).")
-    asyncio.create_task(asyncio.to_thread(check_generation_queue))
+    await update.message.reply_text("🚀 Размораживаю зависшие посты и ПРИНУДИТЕЛЬНО запускаю генерацию следующего поста... Это займет ~1 минуту.")
+    asyncio.create_task(asyncio.to_thread(lambda: check_generation_queue(force=True)))
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
@@ -269,25 +269,41 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             else:
                 await query.edit_message_text(text="Plan not found or already processed.")
                 
-        elif data.startswith("approve_post_"):
+        elif data.startswith("publish_now_"):
             plan_item_id = data.split("_", 2)[2]
             plan = db.query(ContentPlan).filter(ContentPlan.status == "active", ContentPlan.author_id == user_id).first()
             if plan:
                 plan.items = [
-                    {**item, "status": "approved"} if item.get("item_id") == plan_item_id else item
+                    {**item, "status": "published"} if item.get("item_id") == plan_item_id else item
                     for item in plan.items
                 ]
                 db.commit()
                 
-                # Wake up generation agent to actually publish
+                # Wake up generation agent to actually publish immediately
                 state = db.query(AgentState).filter(AgentState.plan_item_id == plan_item_id).first()
                 if state:
                     agent = GenerationAgent()
                     ctx = {"plan_item_id": plan_item_id}
-                    agent.run(db=db, author_id=user_id, trigger_message="Пост согласован. Вызывай publish_post.", context=ctx, previous_messages=state.messages)
+                    agent.run(db=db, author_id=user_id, trigger_message="Пост согласован для немедленной публикации. Вызывай publish_post прямо сейчас.", context=ctx, previous_messages=state.messages)
                     db.delete(state)
                     db.commit()
                     
-                await query.edit_message_text(text="Post approved and published!")
+                await query.edit_message_text(text="🚀 Пост опубликован!")
+                
+        elif data.startswith("schedule_post_"):
+            plan_item_id = data.split("_", 2)[2]
+            plan = db.query(ContentPlan).filter(ContentPlan.status == "active", ContentPlan.author_id == user_id).first()
+            if plan:
+                planned_date_str = "неизвестно"
+                plan.items = [
+                    {**item, "status": "scheduled"} if item.get("item_id") == plan_item_id else item
+                    for item in plan.items
+                ]
+                for item in plan.items:
+                    if item.get("item_id") == plan_item_id:
+                        planned_date_str = item.get("planned_date", "неизвестно")
+                db.commit()
+                await query.edit_message_text(text=f"📅 Пост одобрен и запланирован на публикацию: {planned_date_str}")
+                    
     finally:
         db.close()
