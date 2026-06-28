@@ -188,7 +188,7 @@ def check_publishing_queue():
                                 if state:
                                     agent = GenerationAgent()
                                     ctx = {"plan_item_id": item["item_id"]}
-                                    agent.run(db=db, author_id=profile.author_id, trigger_message="Пост запланирован на сейчас. Вызывай publish_post.", context=ctx, previous_messages=state.messages)
+                                    agent.run(db=db, author_id=profile.author_id, trigger_message="Пост запланирован на сейчас. Вызывай publish_post прямо сейчас. Важно: Обязательно вызови get_plan_item, чтобы получить image_ref из базы, и передай его в publish_post!", context=ctx, previous_messages=state.messages)
                                     db.delete(state)
                                 
                                 item["status"] = "published"

@@ -167,10 +167,38 @@ class ToolExecutors:
             if need_image:
                 text += f"\n\n[Требуется изображение: {image_prompt_or_request}]"
                 
-            res = requests.post(
-                f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
-                json={"chat_id": self.author_id, "text": text, "reply_markup": keyboard}
-            )
+            # Check if we already have an image_ref
+            image_ref = None
+            if plan_item_id:
+                plan = self.db.query(ContentPlan).filter(ContentPlan.status == "active", ContentPlan.author_id == self.author_id).first()
+                if plan:
+                    for item in plan.items:
+                        if item.get("item_id") == plan_item_id:
+                            image_ref = item.get("image_ref")
+                            break
+
+            if image_ref:
+                if len(text) <= 1024:
+                    res = requests.post(
+                        f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendPhoto",
+                        json={"chat_id": self.author_id, "photo": image_ref, "caption": text, "reply_markup": keyboard}
+                    )
+                else:
+                    # Caption too long, send photo first, then text
+                    requests.post(
+                        f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendPhoto",
+                        json={"chat_id": self.author_id, "photo": image_ref}
+                    )
+                    res = requests.post(
+                        f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
+                        json={"chat_id": self.author_id, "text": text, "reply_markup": keyboard}
+                    )
+            else:
+                res = requests.post(
+                    f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
+                    json={"chat_id": self.author_id, "text": text, "reply_markup": keyboard}
+                )
+                
             if res.status_code != 200:
                 raise Exception(f"Telegram API Error: {res.text}")
 
@@ -215,10 +243,20 @@ class ToolExecutors:
         if config.TELEGRAM_BOT_TOKEN:
             try:
                 if image_ref:
-                    res = requests.post(
-                        f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendPhoto",
-                        json={"chat_id": channel_id, "photo": image_ref, "caption": post_text}
-                    )
+                    if len(post_text) <= 1024:
+                        res = requests.post(
+                            f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendPhoto",
+                            json={"chat_id": channel_id, "photo": image_ref, "caption": post_text}
+                        )
+                    else:
+                        requests.post(
+                            f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendPhoto",
+                            json={"chat_id": channel_id, "photo": image_ref}
+                        )
+                        res = requests.post(
+                            f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
+                            json={"chat_id": channel_id, "text": post_text}
+                        )
                 else:
                     res = requests.post(
                         f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",

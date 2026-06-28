@@ -323,11 +323,18 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 if state:
                     agent = GenerationAgent()
                     ctx = {"plan_item_id": plan_item_id}
-                    agent.run(db=db, author_id=user_id, trigger_message="Пост согласован для немедленной публикации. Вызывай publish_post прямо сейчас.", context=ctx, previous_messages=state.messages)
+                    response = agent.run(db=db, author_id=user_id, trigger_message="Пост согласован для немедленной публикации. Вызывай publish_post прямо сейчас. Важно: Обязательно вызови get_plan_item, чтобы получить image_ref из базы, и передай его в publish_post! Если publish_post вернул ошибку, сообщи мне об этом. Если всё прошло успешно, ответь 'Пост успешно опубликован!'.", context=ctx, previous_messages=state.messages)
                     db.delete(state)
                     db.commit()
                     
-                await query.edit_message_text(text="🚀 Пост опубликован!")
+                    if isinstance(response, dict) and response.get("status") == "completed":
+                        await query.edit_message_text(text=response.get("content", "🚀 Пост опубликован!"))
+                    elif isinstance(response, str):
+                        await query.edit_message_text(text=response)
+                    else:
+                        await query.edit_message_text(text="🚀 Пост отправлен агенту на публикацию.")
+                else:
+                    await query.edit_message_text(text="🚀 Пост опубликован! (состояние агента не найдено, возможно он уже опубликовал)")
                 
         elif data.startswith("schedule_post_"):
             plan_item_id = data.split("_", 2)[2]
