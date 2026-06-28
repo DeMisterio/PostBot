@@ -150,6 +150,28 @@ class ToolExecutors:
 
     def propose_post(self, post_text: str, need_image: bool, image_prompt_or_request: str = None):
         plan_item_id = self.context.get("plan_item_id")
+        
+        # Send to author via Telegram FIRST
+        if config.TELEGRAM_BOT_TOKEN:
+            keyboard = {
+                "inline_keyboard": [
+                    [{"text": "✅ Опубликовать", "callback_data": f"approve_post_{plan_item_id}"}],
+                    [{"text": "✏️ Редактировать", "callback_data": f"edit_post_{plan_item_id}"}],
+                    [{"text": "⏭ Пропустить", "callback_data": f"skip_post_{plan_item_id}"}]
+                ]
+            }
+            text = f"📝 **Предлагаю пост:**\n\n{post_text}"
+            if need_image:
+                text += f"\n\n[Требуется изображение: {image_prompt_or_request}]"
+                
+            res = requests.post(
+                f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
+                json={"chat_id": self.author_id, "text": text, "reply_markup": keyboard}
+            )
+            if res.status_code != 200:
+                raise Exception(f"Telegram API Error: {res.text}")
+
+        # Update DB only if Telegram succeeded
         if plan_item_id:
             plan = self.db.query(ContentPlan).filter(ContentPlan.status == "active", ContentPlan.author_id == self.author_id).first()
             if plan:
@@ -158,24 +180,6 @@ class ToolExecutors:
                     for item in plan.items
                 ]
                 self.db.commit()
-
-            # Send to author via Telegram
-            if config.TELEGRAM_BOT_TOKEN:
-                keyboard = {
-                    "inline_keyboard": [
-                        [{"text": "✅ Опубликовать", "callback_data": f"approve_post_{plan_item_id}"}],
-                        [{"text": "✏️ Редактировать", "callback_data": f"edit_post_{plan_item_id}"}],
-                        [{"text": "⏭ Пропустить", "callback_data": f"skip_post_{plan_item_id}"}]
-                    ]
-                }
-                text = f"Предлагаю пост:\n\n{post_text}"
-                if need_image:
-                    text += f"\n\n[Требуется изображение: {image_prompt_or_request}]"
-                    
-                requests.post(
-                    f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
-                    json={"chat_id": self.author_id, "text": text, "reply_markup": keyboard}
-                )
 
         return json.dumps({"status": "paused", "message": "Post proposed to author. Waiting for approval."})
 
