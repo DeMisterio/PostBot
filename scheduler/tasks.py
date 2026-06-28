@@ -12,10 +12,11 @@ def check_generation_queue(force=False):
         plans = db.query(ContentPlan).filter(ContentPlan.status == "active").all()
         for plan in plans:
             frozen = False
-            for item in plan.items:
-                if item.get("status") in ["generating", "awaiting_approval"]:
-                    frozen = True
-                    break
+            if not force:
+                for item in plan.items:
+                    if item.get("status") in ["generating", "awaiting_approval"]:
+                        frozen = True
+                        break
             if frozen:
                 continue
 
@@ -50,6 +51,15 @@ def check_generation_queue(force=False):
                                     print(f"GenerationAgent finished: {response}")
                                     if isinstance(response, str):
                                         raise RuntimeError(f"Agent API Error: {response}")
+                                    elif isinstance(response, dict) and response.get("status") == "paused":
+                                        from models import AgentState
+                                        new_state = AgentState(
+                                            author_id=profile.author_id,
+                                            plan_item_id=response.get("plan_item_id", item["item_id"]),
+                                            messages=response.get("messages")
+                                        )
+                                        db.add(new_state)
+                                        db.commit()
                                 except Exception as e:
                                     print(f"GenerationAgent failed: {e}")
                                     plan_refresh = db.query(ContentPlan).filter(ContentPlan.plan_id == plan.plan_id).first()

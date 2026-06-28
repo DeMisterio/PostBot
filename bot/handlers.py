@@ -189,8 +189,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if update.message.photo:
             file_id = update.message.photo[-1].file_id # highest res
+            text = f"[Пользователь прикрепил изображение. ID: {file_id}]"
+            
+            state = db.query(AgentState).filter(AgentState.author_id == user_id).first()
             plan = db.query(ContentPlan).filter(ContentPlan.status == "active", ContentPlan.author_id == user_id).first()
-            if plan:
+            
+            if state and state.plan_item_id and state.plan_item_id != "chat":
+                if plan:
+                    plan.items = [
+                        {**item, "image_ref": file_id} if item.get("item_id") == state.plan_item_id else item
+                        for item in plan.items
+                    ]
+                    db.commit()
+            elif plan:
                 pending_item = next((item for item in plan.items if item.get("status") == "awaiting_approval"), None)
                 if pending_item:
                     plan.items = [
@@ -198,10 +209,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         for item in plan.items
                     ]
                     db.commit()
-                    await update.message.reply_text("Изображение получено и прикреплено к посту. Нажмите '✅ Опубликовать' на предложенном посте, чтобы продолжить.")
+                    await update.message.reply_text("Изображение получено и прикреплено к посту. Выберите действие на предложенном посте, чтобы продолжить.")
                     return
-            await update.message.reply_text("Картинка получена, но сейчас нет поста, ожидающего согласования с картинкой.")
-            return
+                else:
+                    await update.message.reply_text("Картинка получена, но сейчас нет поста, ожидающего ответа.")
+                    return
 
         # 1. Reset last_author_contact_at for active plans
         plan = db.query(ContentPlan).filter(ContentPlan.status == "active", ContentPlan.author_id == user_id).first()
