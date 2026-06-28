@@ -220,7 +220,16 @@ CHAT_TOOLS = [
         "type": "object",
         "properties": {
           "target": {"type": "string", "enum": ["content_plan", "author_profile"]},
-          "patch": {"type": "object", "additionalProperties": True},
+          "patch": {
+              "type": "object", 
+              "description": "Объект с изменениями. Для профиля автора используйте ключи: 'voice_and_rules', 'background', 'schedule_settings'.",
+              "properties": {
+                  "voice_and_rules": {"type": "object", "description": "Словарь: правила текста, тон (tone of voice), форматирование"},
+                  "background": {"type": "object", "description": "Словарь: биография автора, фокус канала, стек технологий"},
+                  "schedule_settings": {"type": "object", "description": "Словарь: частота и расписание постов"}
+              },
+              "additionalProperties": True
+          },
           "human_summary": {"type": "string", "description": "Короткое описание изменения для показа автору"}
         },
         "required": ["target", "patch", "human_summary"],

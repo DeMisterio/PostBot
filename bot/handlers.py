@@ -1,8 +1,9 @@
 import json
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import datetime
-from agents.instances import ChatAgent, GenerationAgent
+from agents.instances import ChatAgent, GenerationAgent, PlanningAgent
 from database import SessionLocal
 from models import ContentPlan, AgentState, AuthorProfile
 
@@ -40,6 +41,30 @@ async def handle_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Ваш профиль и все данные полностью удалены. Отправьте /start, чтобы начать настройку заново.")
         else:
             await update.message.reply_text("Профиль не найден. Нажмите /start для настройки.")
+    finally:
+        db.close()
+
+async def handle_plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = SessionLocal()
+    try:
+        profile = db.query(AuthorProfile).filter(AuthorProfile.author_id == user_id).first()
+        if not profile or not profile.openai_api_key:
+            await update.message.reply_text("Сначала завершите настройку профиля через /start.")
+            return
+            
+        await update.message.reply_text("⏳ Запускаю генерацию контент-плана... Это может занять около минуты.")
+        
+        def run_agent():
+            agent = PlanningAgent()
+            thread_db = SessionLocal()
+            try:
+                agent.run(db=thread_db, author_id=user_id, trigger_message="Generate new content plan.")
+            finally:
+                thread_db.close()
+                
+        asyncio.create_task(asyncio.to_thread(run_agent))
+        
     finally:
         db.close()
 

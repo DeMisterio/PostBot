@@ -93,7 +93,31 @@ class ToolExecutors:
         )
         self.db.add(plan)
         self.db.commit()
-        return json.dumps({"status": "success", "plan_id": plan.plan_id, "message": "Plan submitted for approval."})
+        
+        # Send plan to author via Telegram
+        if config.TELEGRAM_BOT_TOKEN:
+            text_lines = ["🗓 **Новый контент-план на согласование!**\n"]
+            for idx, item in enumerate(items, 1):
+                title = item.get("title", "Без названия")
+                ptype = item.get("type", "пост")
+                date = item.get("planned_date", "Не указана")
+                text_lines.append(f"{idx}. {title} ({ptype}) — {date}")
+            text_lines.append("\nНажмите кнопку ниже, чтобы утвердить план и запустить генерацию.")
+            
+            keyboard = {
+                "inline_keyboard": [
+                    [{"text": "✅ Утвердить план", "callback_data": f"approve_plan_{plan.plan_id}"}]
+                ]
+            }
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
+                    json={"chat_id": self.author_id, "text": "\n".join(text_lines), "reply_markup": keyboard, "parse_mode": "Markdown"}
+                )
+            except Exception as e:
+                print(f"Failed to send plan to Telegram: {e}")
+
+        return json.dumps({"status": "success", "plan_id": plan.plan_id, "message": "Plan submitted for approval and sent to author."})
 
     def get_plan_item(self):
         plan_item_id = self.context.get("plan_item_id")
