@@ -44,7 +44,7 @@ async def handle_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         db.close()
 
-async def handle_plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_get_plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     db = SessionLocal()
     try:
@@ -53,18 +53,79 @@ async def handle_plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("Сначала завершите настройку профиля через /start.")
             return
             
-        await update.message.reply_text("⏳ Запускаю генерацию контент-плана... Это может занять около минуты.")
+        # Принудительно закрываем старые планы, сбрасывая цикл
+        old_plans = db.query(ContentPlan).filter(
+            ContentPlan.author_id == user_id, 
+            ContentPlan.status.in_(["active", "awaiting_approval"])
+        ).all()
+        for p in old_plans:
+            p.status = "completed"
+        db.commit()
+            
+        await update.message.reply_text("🔄 Сбрасываю цикл. Запускаю генерацию нового контент-плана... Это может занять около минуты.")
         
         def run_agent():
             agent = PlanningAgent()
             thread_db = SessionLocal()
             try:
                 agent.run(db=thread_db, author_id=user_id, trigger_message="Generate new content plan.")
+            except Exception as e:
+                print(f"Critical error in PlanningAgent thread: {e}")
             finally:
                 thread_db.close()
                 
         asyncio.create_task(asyncio.to_thread(run_agent))
         
+    finally:
+        db.close()
+
+async def handle_plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = SessionLocal()
+    try:
+        plan = db.query(ContentPlan).filter(
+            ContentPlan.author_id == user_id,
+            ContentPlan.status.in_(["active", "awaiting_approval"])
+        ).first()
+        
+        if not plan:
+            await update.message.reply_text("У вас нет активного плана. Используйте команду /get_plan, чтобы сгенерировать новый цикл.")
+            return
+            
+        text_lines = [f"📋 **Ваш текущий контент-план** (Статус: {plan.status})\n"]
+        for idx, item in enumerate(plan.items, 1):
+            title = item.get("title", "Без названия")
+            ptype = item.get("type", "пост")
+            date = item.get("planned_date", "Не указана")
+            status = item.get("status", "unknown")
+            
+            # Translate status to human readable emoji
+            if status == "published":
+                status_emoji = "✅ Опубликован"
+            elif status == "generating":
+                status_emoji = "⏳ Генерируется"
+            elif status == "awaiting_approval":
+                status_emoji = "📝 Ждет вашего решения"
+            elif status == "planned":
+                status_emoji = "📅 Запланирован"
+            elif status == "skipped":
+                status_emoji = "⏭ Пропущен"
+            else:
+                status_emoji = status
+                
+            text_lines.append(f"{idx}. {title} ({ptype})")
+            text_lines.append(f"   Дата: {date} | Статус: {status_emoji}\n")
+            
+        if plan.status == "awaiting_approval":
+            keyboard = {
+                "inline_keyboard": [
+                    [{"text": "✅ Утвердить план", "callback_data": f"approve_plan_{plan.plan_id}"}]
+                ]
+            }
+            await update.message.reply_text("\n".join(text_lines), reply_markup=keyboard)
+        else:
+            await update.message.reply_text("\n".join(text_lines))
+            
     finally:
         db.close()
 

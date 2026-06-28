@@ -115,10 +115,12 @@ class ToolExecutors:
                 ]
             }
             try:
-                requests.post(
+                res = requests.post(
                     f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage",
-                    json={"chat_id": self.author_id, "text": "\n".join(text_lines), "reply_markup": keyboard, "parse_mode": "Markdown"}
+                    json={"chat_id": self.author_id, "text": "\n".join(text_lines), "reply_markup": keyboard}
                 )
+                if res.status_code != 200:
+                    print(f"Telegram API Error: {res.text}")
             except Exception as e:
                 print(f"Failed to send plan to Telegram: {e}")
 
