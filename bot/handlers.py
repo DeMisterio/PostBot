@@ -224,7 +224,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if state and state.plan_item_id and state.plan_item_id != "chat":
                 if plan:
                     plan.items = [
-                        {**item, "image_ref": file_id} if item.get("item_id") == state.plan_item_id else item
+                        {**item, "image_ref": file_id} if str(item.get("item_id")) == str(state.plan_item_id) else item
                         for item in plan.items
                     ]
                     db.commit()
@@ -232,7 +232,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pending_item = next((item for item in plan.items if item.get("status") == "awaiting_approval"), None)
                 if pending_item:
                     plan.items = [
-                        {**item, "image_ref": file_id} if item.get("item_id") == pending_item["item_id"] else item
+                        {**item, "image_ref": file_id} if str(item.get("item_id")) == str(pending_item["item_id"]) else item
                         for item in plan.items
                     ]
                     db.commit()
@@ -317,7 +317,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             plan = db.query(ContentPlan).filter(ContentPlan.status == "active", ContentPlan.author_id == user_id).first()
             if plan:
                 plan.items = [
-                    {**item, "status": "published"} if item.get("item_id") == plan_item_id else item
+                    {**item, "status": "published"} if str(item.get("item_id")) == str(plan_item_id) else item
                     for item in plan.items
                 ]
                 db.commit()

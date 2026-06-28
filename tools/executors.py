@@ -173,7 +173,7 @@ class ToolExecutors:
                 plan = self.db.query(ContentPlan).filter(ContentPlan.status == "active", ContentPlan.author_id == self.author_id).first()
                 if plan:
                     for item in plan.items:
-                        if item.get("item_id") == plan_item_id:
+                        if str(item.get("item_id")) == str(plan_item_id):
                             image_ref = item.get("image_ref")
                             break
 
@@ -223,7 +223,7 @@ class ToolExecutors:
         item_approved = False
         target_item = None
         for item in plan.items:
-            if item.get("item_id") == plan_item_id and item.get("status") in ["approved", "published", "scheduled"]:
+            if str(item.get("item_id")) == str(plan_item_id) and item.get("status") in ["approved", "published", "scheduled"]:
                 item_approved = True
                 target_item = item
                 break
@@ -285,7 +285,7 @@ class ToolExecutors:
 
         # Update plan status to published
         plan.items = [
-            {**item, "status": "published"} if item.get("item_id") == plan_item_id else item
+            {**item, "status": "published"} if str(item.get("item_id")) == str(plan_item_id) else item
             for item in plan.items
         ]
         self.db.commit()
