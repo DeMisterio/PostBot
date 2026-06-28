@@ -56,7 +56,23 @@ class AgentCore:
             messages.append(message)
             
             if not message.tool_calls:
-                return message.content
+                serializable_messages = []
+                for m in messages:
+                    if isinstance(m, dict):
+                        serializable_messages.append(m)
+                    else:
+                        serializable_messages.append(m.model_dump(exclude_unset=True))
+                
+                # Keep system prompt + last 10 messages to avoid overflow
+                if len(serializable_messages) > 11:
+                    sys_prompt = [m for m in serializable_messages if m.get("role") == "system"]
+                    serializable_messages = sys_prompt + serializable_messages[-10:]
+
+                return {
+                    "status": "completed",
+                    "content": message.content,
+                    "messages": serializable_messages
+                }
             
             tool_calls_count += 1
             for tool_call in message.tool_calls:

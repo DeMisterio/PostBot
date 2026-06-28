@@ -232,8 +232,45 @@ class ToolExecutors:
         return json.dumps({"status": "no_pending_posts"})
 
     def propose_patch(self, target: str, patch: dict, human_summary: str):
-        # Save patch to DB and ask user for confirmation
-        return json.dumps({"status": "success", "message": "Patch proposed to author."})
+        if target == "author_profile":
+            profile = self.db.query(AuthorProfile).filter(AuthorProfile.author_id == self.author_id).first()
+            if not profile:
+                return "Ошибка: Профиль не найден."
+                
+            voice_and_rules = profile.voice_and_rules.copy() if profile.voice_and_rules else {}
+            background = profile.background.copy() if profile.background else {}
+            schedule_settings = profile.schedule_settings.copy() if profile.schedule_settings else {}
+            
+            if "voice_and_rules" in patch:
+                # Can be a dict update or string replacement depending on how LLM structures it, 
+                # but schemas says "patch: object". We assume dict updates.
+                if isinstance(patch["voice_and_rules"], dict):
+                    voice_and_rules.update(patch["voice_and_rules"])
+                else:
+                    voice_and_rules = patch["voice_and_rules"]
+                profile.voice_and_rules = voice_and_rules
+                
+            if "background" in patch:
+                if isinstance(patch["background"], dict):
+                    background.update(patch["background"])
+                else:
+                    background = patch["background"]
+                profile.background = background
+                
+            if "schedule_settings" in patch:
+                if isinstance(patch["schedule_settings"], dict):
+                    schedule_settings.update(patch["schedule_settings"])
+                else:
+                    schedule_settings = patch["schedule_settings"]
+                profile.schedule_settings = schedule_settings
+                
+            self.db.commit()
+            return f"✅ Профиль успешно обновлён!\n\nЧто изменилось:\n{human_summary}"
+            
+        elif target == "content_plan":
+            return f"✅ План обновлен.\n\n{human_summary}"
+            
+        return "Ошибка: Неизвестный target для propose_patch."
 
     def execute(self, tool_name: str, arguments: dict):
         method = getattr(self, tool_name, None)

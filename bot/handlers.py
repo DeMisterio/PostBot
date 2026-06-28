@@ -102,7 +102,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 2. Check for AgentState to resume GenerationAgent
         state = db.query(AgentState).filter(AgentState.author_id == user_id).first()
-        if state:
+        if state and state.plan_item_id and state.plan_item_id != "chat":
             agent = GenerationAgent()
             ctx = {"plan_item_id": state.plan_item_id}
             response = agent.run(db=db, author_id=user_id, trigger_message=text, context=ctx, previous_messages=state.messages)
@@ -111,20 +111,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             # Default to ChatAgent for standard messages
             agent = ChatAgent()
-            response = agent.run(db=db, author_id=user_id, trigger_message=text)
+            prev_msgs = state.messages if state else None
+            if state:
+                db.delete(state)
+                db.commit()
+            response = agent.run(db=db, author_id=user_id, trigger_message=text, previous_messages=prev_msgs)
 
-        # 3. Handle paused state
-        if isinstance(response, dict) and response.get("status") == "paused":
-            new_state = AgentState(
-                author_id=user_id,
-                plan_item_id=response.get("plan_item_id"),
-                messages=response.get("messages")
-            )
-            db.add(new_state)
-            db.commit()
-            # Do not reply text because we already sent the question via tools
+        # 3. Handle state
+        if isinstance(response, dict):
+            if response.get("status") == "paused":
+                new_state = AgentState(
+                    author_id=user_id,
+                    plan_item_id=response.get("plan_item_id"),
+                    messages=response.get("messages")
+                )
+                db.add(new_state)
+                db.commit()
+                # Do not reply text because we already sent the question via tools
+            elif response.get("status") == "completed":
+                new_state = AgentState(
+                    author_id=user_id,
+                    plan_item_id="chat",
+                    messages=response.get("messages")
+                )
+                db.add(new_state)
+                db.commit()
+                await update.message.reply_text(response.get("content"))
         else:
-            await update.message.reply_text(response)
+            await update.message.reply_text(str(response))
     finally:
         db.close()
 
