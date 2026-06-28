@@ -292,7 +292,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception as e:
+        print(f"Failed to answer callback query: {e}")
+        
     data = query.data
 
     user_id = str(update.effective_user.id)
