@@ -139,7 +139,7 @@ async def handle_generate_command(update: Update, context: ContextTypes.DEFAULT_
             updated = False
             new_items = []
             for it in p.items:
-                if it.get("status") == "generating":
+                if it.get("status") == "generating" or not it.get("status"):
                     it["status"] = "planned"
                     updated = True
                 new_items.append(it)

@@ -90,6 +90,8 @@ class ToolExecutors:
         for item in items:
             if "item_id" not in item or not item["item_id"]:
                 item["item_id"] = str(uuid.uuid4())
+            if "status" not in item:
+                item["status"] = "planned"
                 
         plan = ContentPlan(
             items=items,
