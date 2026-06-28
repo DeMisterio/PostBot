@@ -27,6 +27,22 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         db.close()
 
+async def handle_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = SessionLocal()
+    try:
+        profile = db.query(AuthorProfile).filter(AuthorProfile.author_id == user_id).first()
+        if profile:
+            db.delete(profile)
+            db.query(ContentPlan).filter(ContentPlan.author_id == user_id).delete()
+            db.query(PostsHistory).filter(PostsHistory.author_id == user_id).delete()
+            db.commit()
+            await update.message.reply_text("Ваш профиль и все данные полностью удалены. Отправьте /start, чтобы начать настройку заново.")
+        else:
+            await update.message.reply_text("Профиль не найден. Нажмите /start для настройки.")
+    finally:
+        db.close()
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     text = update.message.text or update.message.caption or ""
