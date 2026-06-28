@@ -36,15 +36,19 @@ class AgentCore:
         
         while tool_calls_count < self.max_tool_calls:
             try:
-                # Need to use **kwargs for reasoning_effort in case older SDK versions complain about unknown params.
-                # However, since the spec demands it, we assume the SDK supports it.
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    tools=self.tools_schema,
-                    tool_choice="auto",
-                    reasoning_effort=self.reasoning_effort
-                )
+                kwargs = {
+                    "model": self.model,
+                    "messages": messages,
+                    "tools": self.tools_schema,
+                    "tool_choice": "auto"
+                }
+                
+                # Only pass reasoning_effort if using a newer model/SDK that supports it
+                # For standard GPT models or older SDKs, it will raise an error.
+                if hasattr(client.chat.completions, "create") and self.model.startswith("o"):
+                    kwargs["reasoning_effort"] = self.reasoning_effort
+
+                response = client.chat.completions.create(**kwargs)
             except Exception as e:
                 return f"Error communicating with OpenAI API: {str(e)}"
             
